@@ -1,0 +1,22 @@
+{
+  "note": "Synthetic request examples; no personal data. Optional tools need the backend adapter.",
+  "calls": [
+    {"name": "get_data_freshness", "arguments": {}},
+    {"name": "get_card_bills", "arguments": {"months": 3}},
+    {"name": "list_transactions", "arguments": {"days": 7, "source": "upi", "limit": 20}},
+    {"name": "health_records", "arguments": {"query": {"days": 14}}},
+    {
+      "name": "query_money",
+      "arguments": {
+        "query": {
+          "start_date": "2025-09-01",
+          "end_date": "2025-09-30",
+          "compare_start_date": "2025-08-01",
+          "compare_end_date": "2025-08-31",
+          "category": "food",
+          "group_by": "category"
+        }
+      }
+    }
+  ]
+}
