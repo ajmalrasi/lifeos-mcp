@@ -15,6 +15,7 @@
   "/expenses/recurring",
   "/expenses/{transaction_id}/repayment-candidates",
   "/github",
+  "/health/records",
   "/healthz",
   "/mail/accounts",
   "/money/profile",

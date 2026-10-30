@@ -5,8 +5,8 @@ health aggregation, spending exclusions, reconciliation, currencies and date
 logic in LifeOS services; the MCP project owns tool schemas and transport.
 
 The initial repository does not switch Ask to MCP. Today Ask still calls its
-existing internal functions. The optional adapter also calls those same functions,
-so adding Hermes need not create a second calculation implementation.
+existing internal functions. The native read endpoints call those same functions, so external clients reuse
+the existing calculation implementation.
 
 Suggested later migration:
 
@@ -22,7 +22,7 @@ Suggested later migration:
 5. Run `backend/scripts/evaluate_ask.py` and inspect actual arithmetic, dates,
    EMI rules, citations and outage behavior before replacing the existing path.
 
-Use one authoritative schema per migrated tool. The current optional tools accept
+Use one authoritative schema per migrated tool. The health/money tools accept
 `{"query": {...}}`; existing Ask's corresponding tools use flat arguments. The
 migration must adapt those arguments intentionally rather than assuming they are
 drop-in replacements. Existing health windows remain limited to 90 days.
@@ -31,7 +31,7 @@ Ask can launch a local stdio subprocess with the server extra in a separate virt
 environment. That avoids upgrading the backend's pinned dependencies and avoids a
 dependency on the Pi for every Ask request. A future authenticated HTTP MCP service
 could serve multiple clients, but it is not part of v0.2. See `clients.md` for the
-ChatGPT Secure MCP Tunnel path to the existing stdio server. The 38-tool catalog
+ChatGPT Secure MCP Tunnel path to the existing stdio server. The 40-tool catalog
 need not be injected into Ask's small context all at once; discovery and selection
 should preserve its existing token budget.
 

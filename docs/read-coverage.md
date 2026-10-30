@@ -1,8 +1,8 @@
 # Complete reading coverage
 
-Audit date: 2026-10-31. The live backend has 39 application GET operations. v0.2
-exposes 38, including utility reads and binary trip attachments. Twelve were in
-v0.1; the 26 additions complete the useful read catalog.
+Audit date: 2026-10-31. The live backend has 40 application GET operations. v0.3
+exposes 39, including utility reads and binary trip attachments. Twelve were in
+v0.1; v0.2 added 26 reads, and v0.3 makes health/money reads native APIs.
 
 See the README tool table for each route mapping. `tests/fixtures/backend-get-paths.json`
 stores only the audited route names, with no personal payloads. Coverage tests
@@ -24,9 +24,8 @@ compares the catalog against the actual LifeOS runtime's registered GET routes.
 | Ask starters and notifications | `get_ask_suggestions`, `get_notifications` |
 | Diagnostics | `get_model_health`, `get_api_info`, `get_api_health` |
 
-The separate, included backend adapter adds two analytical reads: `health_records`
-and `query_money`. They are not among the 39 current GET routes, and are advertised
-only after an operator installs and enables that adapter.
+The native `/health/records` GET and `/expenses/query` POST add the detailed health
+and analytical money reads. All 40 MCP tools are standard; no adapter is installed.
 
 ## Excluded GET operation
 

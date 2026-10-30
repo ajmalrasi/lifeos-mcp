@@ -11,6 +11,6 @@ def test_all_audited_gets_are_covered_or_explicitly_excluded():
         json.loads((Path(__file__).parent / "fixtures/backend-get-paths.json").read_text())
     )
     exposed = set(READ_ROUTES.values()) | set(DYNAMIC_ROUTES.values())
-    assert len(exposed) == 38
+    assert len(exposed) == 39
     assert audited - exposed == {"/mail/accounts"}
     assert exposed <= audited

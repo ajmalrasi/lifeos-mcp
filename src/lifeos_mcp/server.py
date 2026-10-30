@@ -407,34 +407,28 @@ def create_server(settings: Settings, client: LifeOSClient | None = None) -> Fas
         """
         return await read("api_health")
 
-    # Optional tools are absent from discovery unless their backend adapter is enabled.
-    if settings.enable_agent_reads:
+    @server.tool(annotations=annotations)
+    async def health_records(query: HealthQuery) -> ToolResult:
+        """Read synced sleep, heart readings, steps and workouts for up to 90 days. Reuses
+        LifeOS's shared health reader through /health/records; never contacts the phone.
+        """
+        try:
+            return await api.read(
+                "health_records", query.model_dump(mode="json", exclude_none=True)
+            )
+        except LifeOSError as exc:
+            raise ToolError(str(exc)) from None
 
-        @server.tool(annotations=annotations)
-        async def health_records(query: HealthQuery) -> ToolResult:
-            """Read synced sleep, heart readings, steps and workouts for up to 90 days. Reuses
-            LifeOS's existing health tool; never contacts the phone. Requires the backend
-            adapter.
-            """
-            try:
-                return await api.agent_read(
-                    "health_records", query.model_dump(mode="json", exclude_none=True)
-                )
-            except LifeOSError as exc:
-                raise ToolError(str(exc)) from None
-
-        @server.tool(annotations=annotations)
-        async def query_money(query: MoneyQuery) -> ToolResult:
-            """Run LifeOS's guarded analytical money query for exact dates, filters, breakdowns and
-            comparisons. Its spending mode excludes transfers/returns but includes EMI, matching
-            existing Ask; state that basis. No arbitrary SQL. Requires the backend adapter.
-            """
-            try:
-                return await api.agent_read(
-                    "query_money", query.model_dump(mode="json", exclude_none=True)
-                )
-            except LifeOSError as exc:
-                raise ToolError(str(exc)) from None
+    @server.tool(annotations=annotations)
+    async def query_money(query: MoneyQuery) -> ToolResult:
+        """Run LifeOS's guarded analytical money query for exact dates, filters, breakdowns and
+        comparisons. Its spending mode excludes transfers/returns but includes EMI, matching
+        existing Ask; state that basis. No arbitrary SQL. Uses the native /expenses/query endpoint.
+        """
+        try:
+            return await api.query_money(query.model_dump(mode="json", exclude_none=True))
+        except LifeOSError as exc:
+            raise ToolError(str(exc)) from None
 
     return server
 

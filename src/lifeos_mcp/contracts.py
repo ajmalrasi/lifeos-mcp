@@ -1,4 +1,4 @@
-"""Versioned arguments for the optional backend reads. No model-authored SQL."""
+"""Versioned arguments for the native backend reads. No model-authored SQL."""
 
 from datetime import date, datetime, timedelta
 from decimal import Decimal

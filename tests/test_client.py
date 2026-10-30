@@ -5,7 +5,7 @@ from lifeos_mcp.client import LifeOSClient, LifeOSError
 from lifeos_mcp.config import Settings
 
 
-async def test_auth_is_scoped_and_values_pass_through():
+async def test_native_reads_use_normal_api_auth_and_values_pass_through():
     seen = []
 
     def handler(request):
@@ -16,18 +16,16 @@ async def test_auth_is_scoped_and_values_pass_through():
         Settings(
             api_base_url="https://lifeos.test",
             api_token="main-token",
-            enable_agent_reads=True,
-            agent_token="a" * 32,
         ),
         httpx.MockTransport(handler),
     )
     try:
         normal = await client.read("profile")
-        await client.agent_read("query_money", {"limit": 1})
+        await client.query_money({"limit": 1})
         assert seen[0].url.path == "/money/profile"
         assert seen[0].headers["Authorization"] == "Bearer main-token"
-        assert seen[1].url.path == "/agent-reads/money-query"
-        assert seen[1].headers["Authorization"] == "Bearer " + "a" * 32
+        assert seen[1].url.path == "/expenses/query"
+        assert seen[1].headers["Authorization"] == "Bearer main-token"
         assert normal["data"] == {"amount": "123.45", "currency": "INR", "missing": None}
         assert normal["meta"]["timezone"] == "Asia/Kolkata"
         assert normal["meta"]["retrieved_at"]
@@ -56,7 +54,7 @@ async def test_private_request_primitive_cannot_write():
         with pytest.raises(LifeOSError):
             await client._request("POST", "/expenses/rebuild-llm")
         with pytest.raises(LifeOSError):
-            await client.agent_read("query_money", {})
+            await client._request("POST", "/agent-reads/money-query")
         with pytest.raises(LifeOSError):
             await client.statement("../sync")
         with pytest.raises(LifeOSError):

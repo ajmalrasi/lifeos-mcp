@@ -1,27 +1,26 @@
 # Validation — 2026-10-31
 
-- v0.2 local Python 3.12: **108 tests passed**, one optional LifeOS-runtime test module
-  skipped as intended outside that runtime.
-- Real MCP stdio subprocess: initialization, discovery of 38 annotated tools,
-  structured successful response, invalid arguments and unknown-tool errors pass.
-- HTTP guard tests: fixed routes, blocked mutations, scoped credentials, refused
-  redirects, bounded responses and sanitized errors pass.
-- Adapter tests: dedicated authentication, rejected SQL/unknown arguments,
-  database-enforced rejection of a write and pooled-connection cleanup pass.
-- Actual current LifeOS API image, disposable container, no network or production
-  environment/volumes, synthetic SQLite: **4 compatibility tests passed**. Confirmed
-  health missingness, health values, categories, totals independent of detail-row
-  limits, EMI inclusion and exclusion of transfers/reversed debits/credits.
-- Coverage checks confirm all 39 current application GET routes are accounted
-  for: 38 exposed, with the registry-bootstrapping `/mail/accounts` route excluded.
-- Synthetic attachment tests verify preserved binary content, MIME metadata,
-  SHA-256, response-size enforcement and blocked path traversal.
-- Ruff lint/format checks, dependency consistency and wheel/sdist build pass.
+v0.3 uses native LifeOS endpoints; the adapter package and feature flag are removed.
 
-The repository also configures GitHub Actions for Python 3.11 and 3.12. See the
-repository's Actions page for remote run results, which are separate from the
-checks above.
+- MCP local Python 3.12: **101 tests passed**, one optional cross-repository test
+  module skipped outside the isolated LifeOS runtime.
+- Real MCP stdio initialization, discovery of all 40 standard tools, structured
+  results and input/error handling pass.
+- Isolated actual LifeOS runtime, synthetic SQLite, no network: **5 cross-repository
+  tests passed**, including health/money results, API coverage and exact wire-schema
+  parity. This uses the native routes rather than installing an adapter.
+- Backend focused tests: **49 passed**, covering the new APIs, authentication and
+  existing Ask behavior.
+- Backend full suite: **440 passed, 5 failed**. All five failures reproduce on the
+  unchanged baseline (card-cycle date, two Priority tests and two statement-date
+  tests); no new failure was introduced.
+- Ruff lint/format checks and wheel/sdist build pass.
+- Live Jetson API is healthy after deployment of LifeOS commit `5fc64d3`.
+- Actual MCP calls to `GET /health/records` and `POST /expenses/query` succeeded
+  against the live API, with all 40 tools advertised and no adapter configuration.
+- PostgreSQL's `transaction_read_only=on` and the 15-second SQL statement timeout
+  were verified on the production read-session dependency, without attempting writes.
 
-These checks are not a deployment or financial audit. No production API mutation,
-database import, collector, backend rebuild, Ask migration or Hermes configuration
-change was performed. The optional adapter is not present on the running API.
+Both repositories use direct pushes to main per the user's instruction. No Hermes
+or ChatGPT connection has been configured. No source-data import, financial edit,
+collector change, schema change or Ask-to-MCP transport migration was performed.

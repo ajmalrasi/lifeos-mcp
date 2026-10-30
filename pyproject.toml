@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lifeos-mcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "Read-only LifeOS tools for MCP clients"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,7 +16,6 @@ Issues = "https://github.com/ajmalrasi/lifeos-mcp/issues"
 
 [project.optional-dependencies]
 server = ["mcp>=1.28,<2"]
-bridge = ["fastapi>=0.115,<1", "sqlalchemy>=2.0,<3"]
 dev = ["pytest>=8.3,<9", "pytest-asyncio>=0.25,<1", "ruff>=0.9,<1", "build>=1.2,<2"]
 
 [project.scripts]

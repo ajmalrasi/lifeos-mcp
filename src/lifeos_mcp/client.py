@@ -11,6 +11,7 @@ import httpx
 from lifeos_mcp.config import Settings
 
 READ_ROUTES = {
+    "health_records": "/health/records",
     "today": "/analytics/today",
     "freshness": "/status/sync",
     "scores": "/analytics/scores",
@@ -41,7 +42,7 @@ READ_ROUTES = {
     "api_info": "/",
     "api_health": "/healthz",
 }
-AGENT_ROUTES = {"health_records": "/agent-reads/health", "query_money": "/agent-reads/money-query"}
+MONEY_QUERY_PATH = "/expenses/query"
 
 SEGMENTS = {
     "statement_id": r"[1-9][0-9]*",
@@ -149,15 +150,11 @@ class LifeOSClient:
             mime = "application/octet-stream"
         return Attachment(content=content, mime_type=mime, source=f"GET {path}")
 
-    async def agent_read(self, tool: str, arguments: dict) -> dict:
-        if not self.settings.enable_agent_reads or tool not in AGENT_ROUTES:
-            raise LifeOSError("Optional agent reads are not enabled")
-        return await self._request("POST", AGENT_ROUTES[tool], body=arguments, agent=True)
+    async def query_money(self, arguments: dict) -> dict:
+        return await self._request("POST", MONEY_QUERY_PATH, body=arguments)
 
-    async def _request(
-        self, method: str, path: str, *, params=None, body=None, agent=False
-    ) -> dict:
-        data, _ = await self._fetch(method, path, params=params, body=body, agent=agent)
+    async def _request(self, method: str, path: str, *, params=None, body=None) -> dict:
+        data, _ = await self._fetch(method, path, params=params, body=body)
         try:
             payload = json.loads(data)
         except (ValueError, UnicodeDecodeError):
@@ -168,14 +165,14 @@ class LifeOSClient:
             raise LifeOSError("LifeOS could not complete this read; no result was substituted")
         return envelope(payload, f"{method} {path}")
 
-    async def _fetch(self, method: str, path: str, *, params=None, body=None, agent=False):
+    async def _fetch(self, method: str, path: str, *, params=None, body=None):
         # This private primitive only accepts the fixed routes used above.
         allowed = (method == "GET" and allowed_get_path(path)) or (
-            method == "POST" and agent and path in AGENT_ROUTES.values()
+            method == "POST" and path == MONEY_QUERY_PATH
         )
         if not allowed:
             raise LifeOSError("Unsupported read route")
-        token = self.settings.agent_token if agent else self.settings.api_token
+        token = self.settings.api_token
         secret = token.get_secret_value()
         headers = {"Accept": "application/json"}
         if secret:
@@ -186,8 +183,10 @@ class LifeOSClient:
             ) as response:
                 if response.status_code in {401, 403}:
                     raise LifeOSError("LifeOS denied access; check the configured token")
-                if response.status_code == 404 and agent:
-                    raise LifeOSError("The optional agent-read adapter is not installed on LifeOS")
+                if response.status_code == 404 and path in {"/health/records", MONEY_QUERY_PATH}:
+                    raise LifeOSError(
+                        "The native LifeOS read endpoint is unavailable; update the backend"
+                    )
                 if not 200 <= response.status_code < 300:
                     raise LifeOSError(f"LifeOS returned HTTP {response.status_code}")
                 data = bytearray()

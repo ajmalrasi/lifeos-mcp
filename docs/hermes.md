@@ -24,25 +24,16 @@ secret environment, then add `LIFEOS_API_TOKEN: "${LIFEOS_API_TOKEN}"` under thi
 entry's `env`. Never paste the token into chat or the repository. A token is not
 needed solely because this connector exists; follow the actual backend settings.
 
-After the optional backend adapter is installed, add these environment entries:
-
-```yaml
-      LIFEOS_ENABLE_AGENT_READS: "true"
-      LIFEOS_AGENT_TOKEN: "${LIFEOS_AGENT_TOKEN}"
-```
-
-The example intentionally has no `tools.include` restriction: all 38 reads are
-available by default, or 40 with the installed adapter enabled. If an existing
-configuration still has the initial 12-tool include list, remove or expand that
-list to discover the additional tools. Keep the dedicated agent token in Hermes's
-private environment. Reload MCP using `/reload-mcp`.
+The server advertises all 40 standard read tools. No adapter flag or second token
+is needed. Remove or expand any old 12-tool include list, then use `/reload-mcp`.
+Native health and money routes must be present in LifeOS before making those reads.
 
 Acceptance checks after deployment:
 
-1. Discover 38 tools, or 40 with the installed adapter enabled.
+1. Discover 40 tools.
 2. Ask when health and Money last synced; compare with LifeOS source status.
 3. Ask for card bills and compare IDs, amounts and due dates with LifeOS.
-4. With the adapter installed, compare exact money dates and health windows with
+4. Compare exact money dates and health windows with
    existing Ask tool results. State EMI inclusion before comparing totals.
 5. Confirm API outages yield errors, not empty lists or invented summaries.
 

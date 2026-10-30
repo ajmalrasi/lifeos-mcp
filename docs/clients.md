@@ -28,7 +28,7 @@ Official references, checked 2026-10-31:
 - [Add a custom MCP server](https://developers.openai.com/api/docs/guides/custom-mcp-server)
 - [Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)
 
-The catalog is identical across clients. Rendering an attachment resource and
+The catalog contains the same 40 standard tools across clients. Rendering an attachment resource and
 displaying large tool responses depend on the host. Retrieved health, money,
 email and trip information enters the client's conversation and may be retained
 or sent to its configured model provider. Read-only access prevents tool-mediated

@@ -36,7 +36,7 @@ async def test_real_stdio_discovery_call_and_validation(synthetic_api):
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "lifeos_mcp"],
-        env={"LIFEOS_API_BASE_URL": synthetic_api, "LIFEOS_ENABLE_AGENT_READS": "false"},
+        env={"LIFEOS_API_BASE_URL": synthetic_api},
     )
     with anyio.fail_after(20):
         async with stdio_client(params) as (read, write):
@@ -44,7 +44,7 @@ async def test_real_stdio_discovery_call_and_validation(synthetic_api):
                 initialized = await session.initialize()
                 assert initialized.serverInfo.name == "LifeOS"
                 tools = await session.list_tools()
-                assert len(tools.tools) == 38
+                assert len(tools.tools) == 40
                 assert all(t.annotations.readOnlyHint for t in tools.tools)
                 result = await session.call_tool("get_data_freshness", {})
                 assert not result.isError

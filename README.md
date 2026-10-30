@@ -1,25 +1,12 @@
 # LifeOS MCP
 
-Read-only tools for accessing LifeOS from compatible MCP clients, including ChatGPT,
-Hermes and future LifeOS Ask. The main
-data stays in LifeOS on the Jetson. The connector asks the existing backend for
-recorded information; it does not maintain a second ledger, infer missing health
-readings, or call an LLM to produce tool results.
+Client-neutral, read-only LifeOS tools for ChatGPT, Hermes, future Ask and other
+compatible MCP clients. **All 40 tools are standard tools.** The server uses normal
+LifeOS HTTP endpoints and has no access to the database or backend Python imports.
 
-**Status:** v0.2. Thirty-eight tools use existing LifeOS HTTP reading routes.
-Two additional tools use an optional backend adapter included in this repository.
-Neither the adapter nor the connector is installed in production. ChatGPT is not
-connected. Hermes on the
-Raspberry Pi and LifeOS Ask have not been reconfigured.
-
-```mermaid
-flowchart LR
-    H[Compatible local MCP clients] --> M[lifeos-mcp stdio subprocess]
-    C[ChatGPT through Secure MCP Tunnel] -.-> M
-    A[Future LifeOS Ask MCP client] -.-> M
-    M --> B[Jetson LifeOS API]
-    B --> D[(LifeOS PostgreSQL)]
-```
+Detailed health and money reads use native LifeOS endpoints:
+`GET /health/records` and `POST /expenses/query`. Ask and these endpoints share
+backend-owned functions. The backend never installs or imports this MCP package.
 
 ## Tools
 
@@ -63,28 +50,18 @@ flowchart LR
 | `get_coding_activity` | `days=30` | `/github` |
 | `get_api_info` | none | `/` |
 | `get_api_health` | none | `/healthz` |
-| `health_records` **optional** | `query`: dates or `days=14`, at most 90 days | adapter → existing LifeOS health reader |
-| `query_money` **optional** | `query`: dates, comparisons, filters, grouping, `limit=10` | adapter → existing guarded money query |
+| `health_records` | `query`: dates or `days=14`, at most 90 days | `GET /health/records` |
+| `query_money` | `query`: dates, comparisons, filters, grouping, `limit=10` | `POST /expenses/query` |
 
-Optional tools are **absent from discovery** unless `LIFEOS_ENABLE_AGENT_READS=true`
-and a dedicated adapter token is configured. Setting that flag does not install
-the adapter: see [backend installation](docs/backend-adapter.md).
-They are optional because the backend read interface is not installed yet, not
-because detailed health or analytical money access is unimportant. See the
-[detailed explanation](docs/optional-tools.md).
+The catalog covers 39 useful GET routes plus the structured POST money read.
+`GET /mail/accounts` stays excluded because it can create registry entries.
+See [coverage](docs/read-coverage.md), [detailed health and money reads](docs/data-reads.md)
+and [client connection options](docs/clients.md).
 
-The catalog covers **38 of the 39 audited application GET operations**. The one
-exception, `GET /mail/accounts`, can create account-registry entries and is therefore
-not a pure read. See the [complete coverage and exclusions](docs/read-coverage.md).
-
-Day-count tools accept 1–366 days; bill history accepts 1–24 months. Transaction
-lists return at most 500 rows with explicit truncation metadata. There is a 2 MiB
-upstream-response cap: large reads fail with an instruction to narrow the window.
-Attachments return original bytes as embedded MIME-typed resources, with size and
-SHA-256 metadata; files exceeding the same cap fail explicitly. File presentation
-depends on the MCP client. No attachment is executed or written to local storage.
-The optional money query allows windows up to 3660 days and at most 50 detail or
-group rows; LifeOS calculates its full-window summary separately from that limit.
+Responses retain LifeOS values and add source/retrieval-time metadata. Default
+response cap is 2 MiB; transaction listings are bounded and mark truncation.
+Attachments return original binary resources within that cap, with MIME and hash
+metadata. File display support depends on the client.
 
 ## Local setup
 
@@ -111,18 +88,18 @@ to the Jetson. No client connection or tunnel is configured by this repository.
 
 ## Configuration
 
-| Environment variable | Default | Purpose |
+| Variable | Default | Purpose |
 |---|---|---|
-| `LIFEOS_API_BASE_URL` | `http://192.168.3.30:8000` | HTTP(S) origin; no credentials, path, query or fragment |
-| `LIFEOS_API_TOKEN` | empty | Existing LifeOS API bearer token, if required |
+| `LIFEOS_API_BASE_URL` | `http://192.168.3.30:8000` | LifeOS HTTP(S) origin |
+| `LIFEOS_API_TOKEN` | empty | Normal API bearer token, if the backend requires one |
 | `LIFEOS_REQUEST_TIMEOUT` | `20` | Request timeout in seconds; 1–120 |
-| `LIFEOS_ENABLE_AGENT_READS` | `false` | Advertise the two optional adapter-backed tools |
-| `LIFEOS_AGENT_TOKEN` | empty | Dedicated token for the optional adapter; at least 32 characters |
 
-The CLI reads the process environment. `.env.example` is a template, not an
-automatically loaded file. Tokens must stay out of Git, prompts, fixtures and
-command-line arguments. HTTP environment proxies are ignored, redirects are not
-followed, TLS verification stays enabled, and upstream error bodies are not echoed.
+There is no adapter package, adapter token or optional-tool switch. Old
+`LIFEOS_ENABLE_AGENT_READS` / `LIFEOS_AGENT_TOKEN` entries can be removed from
+client configuration. Upgrade LifeOS first if its native read routes are missing;
+an unavailable route produces an explicit error, never invented or empty data.
+The CLI reads process environment variables; `.env.example` is not auto-loaded.
+Redirects and ambient HTTP proxies are disabled; TLS verification stays enabled.
 
 ## Data and accounting contract
 
@@ -138,7 +115,7 @@ Amounts, dates, currencies and returned values pass through from LifeOS.
   of user records, not a promise that the backend never writes derived caches.
 - A transaction listing can include credits, transfers and EMI. Its first N rows
   must not be summed and presented as the full spending total.
-- The optional `query_money` reuses existing Ask accounting: spending excludes
+- `query_money` reuses existing Ask accounting: spending excludes
   reconciled transfers/returns and includes EMI. That differs from Money's
   everyday EMI-excluded view. Describe the basis when presenting a total.
 - Statement details are explanatory rows, not an additional spending ledger.
@@ -149,8 +126,8 @@ Amounts, dates, currencies and returned values pass through from LifeOS.
 The MCP surface exposes no sync, rebuild, payment, record-editing or arbitrary SQL
 tools. This is an enforced tool allowlist, **not a sandbox for the Hermes host**:
 the existing main API token can have wider permissions, and an agent with shell
-access could use its own network tools. The optional adapter has a separate token
-and database-enforced read-only transactions.
+access could use its own network tools. The native health and money endpoints use
+database-enforced read-only transactions.
 
 Retrieved results enter the client's conversation and may be retained there. If
 the client uses a cloud model, selected tool results can be sent to that provider.
@@ -159,7 +136,7 @@ The connector itself does not persist retrieved data or record request bodies.
 ## Development
 
 ```sh
-.venv/bin/python -m pip install -e '.[server,bridge,dev]'
+.venv/bin/python -m pip install -e '.[server,dev]'
 .venv/bin/ruff check .
 .venv/bin/ruff format --check .
 .venv/bin/pytest
@@ -177,4 +154,4 @@ and [architecture](docs/architecture.md).
 Protocol references: [MCP Python SDK v1](https://py.sdk.modelcontextprotocol.io/v1/)
 and [Hermes MCP configuration](https://hermes-agent.nousresearch.com/docs/reference/mcp-config-reference).
 The server extra intentionally stays on the maintained MCP 1.x line (`>=1.28,<2`).
-The backend adapter does not depend on the MCP SDK or upgrade LifeOS's Pydantic pin.
+The backend has no dependency on this MCP package.

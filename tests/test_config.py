@@ -28,17 +28,6 @@ def test_secrets_are_redacted_and_url_normalized():
     assert "private-test-value" not in repr(settings)
 
 
-def test_optional_adapter_requires_dedicated_token():
-    with pytest.raises(ValidationError):
-        Settings(enable_agent_reads=True, api_token="x" * 32)
-
-
-def test_bad_boolean_does_not_enable_adapter(monkeypatch):
-    monkeypatch.setenv("LIFEOS_ENABLE_AGENT_READS", "perhaps")
-    with pytest.raises(ValidationError):
-        Settings.from_env()
-
-
 @pytest.mark.parametrize(
     "payload",
     [

@@ -1,17 +1,14 @@
-# The two tools that require the backend adapter
+# Detailed health and money reads
 
-These tools are implemented in this repository. They are called **optional**
-because the current LifeOS API does not expose their internal read functions over
-HTTP. They are not experimental calculations, paid features or Hermes-only tools.
+Both are standard MCP tools. They call native LifeOS endpoints with the normal
+API credentials. The backend owns their validation and calculations; Ask uses
+the same services. The MCP server performs no model call, direct database read,
+phone connection, collector or data import.
 
-The included adapter makes exactly two HTTP read operations available. They use a
-dedicated token and database read-only transactions, and reuse the same functions
-as existing LifeOS Ask. They do not call Ask's model, copy the database, contact the
-iPhone, import historical candidates or run collectors.
-
-Until the adapter is installed on the Jetson and explicitly enabled in the MCP
-configuration, neither tool appears in discovery. An absent adapter is an error,
-not an empty health history or zero spending. Installation has not been performed.
+| MCP tool | Native API |
+|---|---|
+| `health_records` | `GET /health/records` |
+| `query_money` | `POST /expenses/query` (a structured read) |
 
 ## `health_records`
 
@@ -87,5 +84,4 @@ when presenting results. Statement line items are not added as a second set of
 transactions, and the isolated spending-history pilot is not part of this query.
 
 Neither tool changes budgets, refunds, categories, repayments, bill-paid flags or
-any other record. See [adapter installation](backend-adapter.md) for the exact
-implementation and deployment requirements.
+any other record. See the native [LifeOS API documentation](https://github.com/ajmalrasi/life_os/blob/main/backend/docs/data-reads.md).

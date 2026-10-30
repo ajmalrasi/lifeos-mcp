@@ -9,6 +9,8 @@ from lifeos_mcp.config import Settings
 from lifeos_mcp.server import create_server
 
 EXPECTED = {
+    "health_records",
+    "query_money",
     "get_today",
     "get_data_freshness",
     "get_health_scores",
@@ -66,7 +68,6 @@ async def test_catalog_is_curated_and_read_only():
         tools = await create_server(Settings(), client).list_tools()
         assert {t.name for t in tools} == EXPECTED
         assert all(t.annotations.readOnlyHint and not t.annotations.destructiveHint for t in tools)
-        assert not {"health_records", "query_money"} & {t.name for t in tools}
     finally:
         await client.aclose()
 
@@ -122,24 +123,24 @@ async def test_tool_validation_happens_before_network(name, args):
         await client.aclose()
 
 
-async def test_optional_reads_have_actual_schemas_and_use_post_only_for_the_bridge():
+async def test_native_money_query_is_always_advertised_and_uses_its_api():
     seen = []
 
     def handler(request):
         seen.append(request)
         return httpx.Response(200, json={"window": {}, "summary": {"total": "12.34"}})
 
-    settings = Settings(enable_agent_reads=True, agent_token="a" * 32)
+    settings = Settings()
     client = LifeOSClient(settings, httpx.MockTransport(handler))
     try:
         server = create_server(settings, client)
         tools = await server.list_tools()
-        assert {t.name for t in tools} == EXPECTED | {"health_records", "query_money"}
+        assert {t.name for t in tools} == EXPECTED
         schema = next(t.inputSchema for t in tools if t.name == "query_money")
         assert "query" in schema["properties"]
         await server.call_tool("query_money", {"query": {"min_amount": "12.34", "limit": 1}})
         assert seen[0].method == "POST"
-        assert seen[0].url.path == "/agent-reads/money-query"
+        assert seen[0].url.path == "/expenses/query"
         assert json.loads(seen[0].content)["min_amount"] == "12.34"
     finally:
         await client.aclose()

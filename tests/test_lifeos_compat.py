@@ -10,6 +10,7 @@ if os.environ.get("DATABASE_URL") != "sqlite+pysqlite:///:memory:":
     pytest.skip("Requires an explicitly isolated LifeOS SQLite runtime", allow_module_level=True)
 pytest.importorskip("app")
 
+from app.api.routes import expenses, health_data
 from app.database import Base
 from app.models.health import HealthRecord
 from app.models.transaction import Transaction
@@ -19,7 +20,6 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from lifeos_mcp.bridge import create_lifeos_router
 from lifeos_mcp.client import DYNAMIC_ROUTES, READ_ROUTES
 
 TOKEN = "synthetic-isolated-compat-token-12345"
@@ -72,7 +72,13 @@ def fixture_app(monkeypatch):
             )
         db.commit()
     api = FastAPI()
-    api.include_router(create_lifeos_router(token=TOKEN))
+    from app.api.deps import require_token
+    from app.config import get_settings
+    from fastapi import Depends
+
+    monkeypatch.setattr(get_settings(), "api_token", TOKEN)
+    api.include_router(health_data.router)
+    api.include_router(expenses.router, dependencies=[Depends(require_token)])
     with TestClient(api) as client:
         yield client, engine
     engine.dispose()
@@ -80,10 +86,10 @@ def fixture_app(monkeypatch):
 
 def test_actual_health_reader_keeps_missing_values_unknown(fixture_app):
     client, engine = fixture_app
-    response = client.post(
-        "/agent-reads/health",
+    response = client.get(
+        "/health/records",
         headers={"Authorization": "Bearer " + TOKEN},
-        json={"start_date": "2025-09-01", "end_date": "2025-09-03"},
+        params={"start_date": "2025-09-01", "end_date": "2025-09-03"},
     )
     assert response.status_code == 200
     payload = response.json()
@@ -97,7 +103,7 @@ def test_actual_health_reader_keeps_missing_values_unknown(fixture_app):
 def test_actual_money_query_preserves_totals_and_categories(fixture_app):
     client, engine = fixture_app
     response = client.post(
-        "/agent-reads/money-query",
+        "/expenses/query",
         headers={"Authorization": "Bearer " + TOKEN},
         json={
             "start_date": "2025-09-01",
@@ -140,7 +146,7 @@ def test_actual_money_accounting_includes_emi_and_excludes_transfers_and_credits
             )
         db.commit()
     response = client.post(
-        "/agent-reads/money-query",
+        "/expenses/query",
         headers={"Authorization": "Bearer " + TOKEN},
         json={"start_date": "2025-09-01", "end_date": "2025-09-03", "limit": 1},
     )
@@ -149,3 +155,17 @@ def test_actual_money_accounting_includes_emi_and_excludes_transfers_and_credits
     assert payload["summary"]["total"] == 80.3
     assert payload["summary"]["count"] == 3
     assert len(payload["rows"]) == 1  # Full summary is independent of the row limit.
+
+
+def test_native_wire_contracts_match_client_models():
+    from app.schemas.data_queries import (
+        HealthQuery as NativeHealthQuery,
+    )
+    from app.schemas.data_queries import (
+        MoneyQuery as NativeMoneyQuery,
+    )
+
+    from lifeos_mcp.contracts import HealthQuery, MoneyQuery
+
+    assert HealthQuery.model_json_schema() == NativeHealthQuery.model_json_schema()
+    assert MoneyQuery.model_json_schema() == NativeMoneyQuery.model_json_schema()
