@@ -20,8 +20,22 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from lifeos_mcp.bridge import create_lifeos_router
+from lifeos_mcp.client import DYNAMIC_ROUTES, READ_ROUTES
 
 TOKEN = "synthetic-isolated-compat-token-12345"
+
+
+def test_catalog_covers_the_actual_backend_get_routes():
+    from app.main import app as lifeos_app
+
+    actual = {
+        r.path
+        for r in lifeos_app.routes
+        if "GET" in (getattr(r, "methods", None) or []) and getattr(r, "include_in_schema", False)
+    }
+    covered = set(READ_ROUTES.values()) | set(DYNAMIC_ROUTES.values())
+    assert actual - covered == {"/mail/accounts"}
+    assert covered <= actual
 
 
 @pytest.fixture

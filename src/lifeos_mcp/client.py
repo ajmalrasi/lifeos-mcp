@@ -1,7 +1,9 @@
 """Bounded, allowlisted HTTP access. Tokens and response bodies are never logged."""
 
 import json
-from datetime import UTC, datetime
+import re
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from typing import Any
 
 import httpx
@@ -20,8 +22,92 @@ READ_ROUTES = {
     "budgets": "/budgets",
     "profile": "/money/profile",
     "recurring": "/expenses/recurring",
+    "new_transactions": "/expenses/new",
+    "trends": "/statements/trends",
+    "payee_rules": "/payee-labels",
+    "payee_preview": "/payee-labels/preview",
+    "payee_match_types": "/payee-labels/match-types",
+    "priority": "/priority",
+    "states": "/analytics/state",
+    "correlations": "/analytics/insights",
+    "insights": "/analytics/synthesis",
+    "weekly_recap": "/analytics/weekly-recap",
+    "suggestions": "/chat/suggestions",
+    "model_health": "/chat/health",
+    "notifications": "/notifications",
+    "trips": "/trips",
+    "movement": "/movement/days",
+    "coding": "/github",
+    "api_info": "/",
+    "api_health": "/healthz",
 }
 AGENT_ROUTES = {"health_records": "/agent-reads/health", "query_money": "/agent-reads/money-query"}
+
+SEGMENTS = {
+    "statement_id": r"[1-9][0-9]*",
+    "transaction_id": r"[1-9][0-9]*",
+    "item_id": r"[1-9][0-9]*",
+    "day": r"[0-9]{4}-[0-9]{2}-[0-9]{2}",
+    "bank": r"[A-Za-z][A-Za-z0-9_-]{0,63}",
+    "card_last4": r"[0-9]{2,4}",
+    "trip_id": r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}",
+    "attachment_id": r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}",
+}
+DYNAMIC_ROUTES = {
+    "statement": "/statements/{statement_id}/details",
+    "pulse_day": "/mood/{day}",
+    "repayment_candidates": "/expenses/{transaction_id}/repayment-candidates",
+    "cycle_details": "/statements/cycles/current/{bank}/{card_last4}",
+    "priority_item": "/priority/{item_id}",
+    "priority_message": "/priority/{item_id}/message",
+    "score_day": "/analytics/scores/{day}",
+    "trip": "/trips/{trip_id}",
+    "trip_attachment": "/trips/{trip_id}/attachments/{attachment_id}",
+}
+
+
+def route_path(route: str, segments: dict) -> str:
+    if route not in DYNAMIC_ROUTES:
+        raise LifeOSError("Unsupported read route")
+    template = DYNAMIC_ROUTES[route]
+    fields = re.findall(r"\{(\w+)\}", template)
+    if set(segments) != set(fields):
+        raise LifeOSError("Invalid route identifiers")
+    values = {}
+    for field in fields:
+        value = segments[field]
+        if field.endswith("_id") and field not in {"trip_id", "attachment_id"}:
+            if type(value) is not int:
+                raise LifeOSError("Record IDs must be positive integers")
+        value = str(value)
+        if not re.fullmatch(SEGMENTS[field], value):
+            raise LifeOSError("Invalid route identifier")
+        if field == "day":
+            try:
+                date.fromisoformat(value)
+            except ValueError:
+                raise LifeOSError("Invalid calendar date") from None
+        values[field] = value
+    return template.format(**values)
+
+
+def allowed_get_path(path: str) -> bool:
+    if path in READ_ROUTES.values():
+        return True
+    for template in DYNAMIC_ROUTES.values():
+        pattern = re.escape(template)
+        for field in re.findall(r"\{(\w+)\}", template):
+            pattern = pattern.replace(re.escape("{" + field + "}"), SEGMENTS[field])
+        if re.fullmatch(pattern, path):
+            return True
+    return False
+
+
+@dataclass(frozen=True)
+class Attachment:
+    content: bytes
+    mime_type: str
+    source: str
 
 
 class LifeOSError(RuntimeError):
@@ -48,9 +134,20 @@ class LifeOSClient:
         return await self._request("GET", READ_ROUTES[route], params=params)
 
     async def statement(self, statement_id: int) -> dict:
-        if type(statement_id) is not int or statement_id < 1:
-            raise LifeOSError("statement_id must be a positive integer")
-        return await self._request("GET", f"/statements/{statement_id}/details")
+        return await self.read_path("statement", statement_id=statement_id)
+
+    async def read_path(self, route: str, *, params: dict | None = None, **segments) -> dict:
+        if route == "trip_attachment":
+            raise LifeOSError("Use the attachment reader for file bytes")
+        return await self._request("GET", route_path(route, segments), params=params)
+
+    async def attachment(self, trip_id: str, attachment_id: str) -> Attachment:
+        path = route_path("trip_attachment", {"trip_id": trip_id, "attachment_id": attachment_id})
+        content, headers = await self._fetch("GET", path)
+        mime = headers.get("content-type", "application/octet-stream").split(";", 1)[0].strip()
+        if not re.fullmatch(r"[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+", mime):
+            mime = "application/octet-stream"
+        return Attachment(content=content, mime_type=mime, source=f"GET {path}")
 
     async def agent_read(self, tool: str, arguments: dict) -> dict:
         if not self.settings.enable_agent_reads or tool not in AGENT_ROUTES:
@@ -60,16 +157,21 @@ class LifeOSClient:
     async def _request(
         self, method: str, path: str, *, params=None, body=None, agent=False
     ) -> dict:
+        data, _ = await self._fetch(method, path, params=params, body=body, agent=agent)
+        try:
+            payload = json.loads(data)
+        except (ValueError, UnicodeDecodeError):
+            raise LifeOSError("LifeOS returned invalid JSON") from None
+        if not isinstance(payload, (list, dict)):
+            raise LifeOSError("LifeOS returned an unexpected response type")
+        if isinstance(payload, dict) and ("error" in payload or payload.get("status") == "error"):
+            raise LifeOSError("LifeOS could not complete this read; no result was substituted")
+        return envelope(payload, f"{method} {path}")
+
+    async def _fetch(self, method: str, path: str, *, params=None, body=None, agent=False):
         # This private primitive only accepts the fixed routes used above.
-        allowed = (
-            (method == "GET" and path in READ_ROUTES.values())
-            or (
-                method == "GET"
-                and path.startswith("/statements/")
-                and path.endswith("/details")
-                and path.removeprefix("/statements/").removesuffix("/details").isdigit()
-            )
-            or (method == "POST" and agent and path in AGENT_ROUTES.values())
+        allowed = (method == "GET" and allowed_get_path(path)) or (
+            method == "POST" and agent and path in AGENT_ROUTES.values()
         )
         if not allowed:
             raise LifeOSError("Unsupported read route")
@@ -92,19 +194,15 @@ class LifeOSClient:
                 async for chunk in response.aiter_bytes():
                     data.extend(chunk)
                     if len(data) > self.settings.max_response_bytes:
-                        raise LifeOSError("LifeOS response is too large; request a smaller window")
-                payload = json.loads(data)
+                        raise LifeOSError(
+                            "LifeOS response is too large; narrow the read "
+                            "or use a smaller attachment"
+                        )
+                return bytes(data), response.headers
         except httpx.TimeoutException:
             raise LifeOSError("LifeOS request timed out; no result was substituted") from None
         except httpx.HTTPError:
             raise LifeOSError("LifeOS could not be reached; check the private network") from None
-        except (ValueError, UnicodeDecodeError):
-            raise LifeOSError("LifeOS returned invalid JSON") from None
-        if not isinstance(payload, (list, dict)):
-            raise LifeOSError("LifeOS returned an unexpected response type")
-        if isinstance(payload, dict) and ("error" in payload or payload.get("status") == "error"):
-            raise LifeOSError("LifeOS could not complete this read; no result was substituted")
-        return envelope(payload, f"{method} {path}")
 
 
 def envelope(data: Any, source: str) -> dict:

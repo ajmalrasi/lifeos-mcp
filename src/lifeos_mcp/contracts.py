@@ -14,6 +14,21 @@ class ToolResult(TypedDict):
     meta: dict[str, Any]
 
 
+class MovementQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    start_date: date | None = None
+    end_date: date | None = None
+
+    @model_validator(mode="after")
+    def validate_window(self):
+        end = self.end_date or datetime.now(ZoneInfo("Asia/Kolkata")).date()
+        start = self.start_date or end - timedelta(days=6)
+        if start > end or (end - start).days >= 366:
+            raise ValueError("Movement windows must be ordered and contain at most 366 days")
+        self.start_date, self.end_date = start, end
+        return self
+
+
 class HealthQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
     days: int = Field(default=14, ge=1, le=90, strict=True)

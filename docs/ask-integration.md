@@ -1,6 +1,6 @@
 # Reusing these tools in LifeOS Ask
 
-Yes: Hermes and Ask can eventually consume the same MCP server interface. Keep
+Yes: ChatGPT, Hermes and Ask can consume the same MCP server interface. Keep
 health aggregation, spending exclusions, reconciliation, currencies and date
 logic in LifeOS services; the MCP project owns tool schemas and transport.
 
@@ -30,7 +30,10 @@ drop-in replacements. Existing health windows remain limited to 90 days.
 Ask can launch a local stdio subprocess with the server extra in a separate virtual
 environment. That avoids upgrading the backend's pinned dependencies and avoids a
 dependency on the Pi for every Ask request. A future authenticated HTTP MCP service
-could serve multiple clients, but it is not part of v0.1.
+could serve multiple clients, but it is not part of v0.2. See `clients.md` for the
+ChatGPT Secure MCP Tunnel path to the existing stdio server. The 38-tool catalog
+need not be injected into Ask's small context all at once; discovery and selection
+should preserve its existing token budget.
 
 Do not route tools through `/chat`: that adds a second model invocation and can
 create a recursion loop when Ask itself is the caller. Tool results must remain

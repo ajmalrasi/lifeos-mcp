@@ -5,7 +5,8 @@
   under dedicated authentication and database read-only transactions.
 - **MCP subprocess:** owns named tools, validated arguments, fixed HTTP routes,
   response limits and error mapping. It has no database credentials.
-- **Hermes / future Ask:** owns the conversation and model interpretation.
+- **Compatible MCP clients (ChatGPT, Hermes, future Ask and others):** own the
+  conversation and model interpretation.
 
 The tool catalog is curated, not generated from every route in OpenAPI. Maintenance
 and mutation endpoints must never become discoverable just because the backend
@@ -16,10 +17,12 @@ Requests do not follow redirects or use ambient HTTP proxies. Main API credentia
 are attached only to existing API reads; adapter credentials only to adapter reads.
 Errors expose status/categories rather than response bodies or request URLs.
 
-The package starts no network listener. Its only supported MCP transport in v0.1
-is stdio, allowing Hermes to manage process lifetime. It does make outbound HTTP
+The package starts no network listener. Its supported MCP transport in v0.2
+is stdio, allowing a compatible client to manage process lifetime. It makes outbound HTTP
 requests to the configured LifeOS origin. An HTTP MCP transport can be added later
 with deliberate authentication and network binding, not by exposing port 8000.
+ChatGPT can instead connect through Secure MCP Tunnel forwarding to the stdio
+process; see [client compatibility](clients.md). Neither connection is deployed.
 
 Health/money adapter dependencies are separate from the MCP SDK to preserve the
 backend's pinned runtime. Tool responses have a shared metadata envelope; numerical

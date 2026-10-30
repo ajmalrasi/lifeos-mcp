@@ -59,6 +59,10 @@ async def test_private_request_primitive_cannot_write():
             await client.agent_read("query_money", {})
         with pytest.raises(LifeOSError):
             await client.statement("../sync")
+        with pytest.raises(LifeOSError):
+            await client._request("GET", "/mail/accounts")
+        with pytest.raises(LifeOSError):
+            await client.read_path("priority_message", item_id=True)
     finally:
         await client.aclose()
 

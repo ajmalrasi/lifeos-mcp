@@ -17,20 +17,6 @@ mcp_servers:
       LIFEOS_API_BASE_URL: http://192.168.3.30:8000
     timeout: 30
     connect_timeout: 15
-    tools:
-      include:
-        - get_today
-        - get_data_freshness
-        - get_health_scores
-        - get_pulse_checkins
-        - list_transactions
-        - get_spending_analysis
-        - get_card_bills
-        - get_card_statement
-        - get_current_card_cycles
-        - get_budgets
-        - get_money_profile
-        - get_recurring_charges
 ```
 
 If backend authentication is enabled, store `LIFEOS_API_TOKEN` in Hermes's private
@@ -45,12 +31,15 @@ After the optional backend adapter is installed, add these environment entries:
       LIFEOS_AGENT_TOKEN: "${LIFEOS_AGENT_TOKEN}"
 ```
 
-Also add `health_records` and `query_money` to `tools.include`. Keep the dedicated
-agent token in Hermes's private environment. Reload MCP using `/reload-mcp`.
+The example intentionally has no `tools.include` restriction: all 38 reads are
+available by default, or 40 with the installed adapter enabled. If an existing
+configuration still has the initial 12-tool include list, remove or expand that
+list to discover the additional tools. Keep the dedicated agent token in Hermes's
+private environment. Reload MCP using `/reload-mcp`.
 
 Acceptance checks after deployment:
 
-1. Discover 12 tools, or 14 with the installed adapter enabled.
+1. Discover 38 tools, or 40 with the installed adapter enabled.
 2. Ask when health and Money last synced; compare with LifeOS source status.
 3. Ask for card bills and compare IDs, amounts and due dates with LifeOS.
 4. With the adapter installed, compare exact money dates and health windows with

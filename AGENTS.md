@@ -12,8 +12,12 @@ that work. Creation of this repo was explicitly scoped to connecting Hermes late
   Test fixtures must be synthetic. Do not print tool result bodies during live QA.
 - Respect missing data, source freshness, currencies, date windows and the existing
   Ask EMI-included / everyday Money EMI-excluded distinction.
-- Twelve tools work against current APIs. Two tools require the optional backend
+- Thirty-eight tools cover the current API's useful GET operations. The
+  `/mail/accounts` GET is excluded because it bootstraps registry entries. Two tools
+  require the optional backend
   adapter and must not be advertised when disabled.
+- This is client-neutral: ChatGPT, Hermes, future LifeOS Ask and other compatible
+  hosts can use the same catalog. Hermes setup is one example, not the architecture.
 - Use Python 3.11+. The `server` and `bridge` extras are intentionally separate;
   do not upgrade the backend's pinned Pydantic to install an MCP subprocess.
 - Run Ruff and pytest after functional changes. Exercise transport and security

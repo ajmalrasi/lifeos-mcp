@@ -44,7 +44,7 @@ async def test_real_stdio_discovery_call_and_validation(synthetic_api):
                 initialized = await session.initialize()
                 assert initialized.serverInfo.name == "LifeOS"
                 tools = await session.list_tools()
-                assert len(tools.tools) == 12
+                assert len(tools.tools) == 38
                 assert all(t.annotations.readOnlyHint for t in tools.tools)
                 result = await session.call_tool("get_data_freshness", {})
                 assert not result.isError

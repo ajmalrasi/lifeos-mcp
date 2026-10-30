@@ -21,6 +21,32 @@ EXPECTED = {
     "get_budgets",
     "get_money_profile",
     "get_recurring_charges",
+    "get_pulse_checkin",
+    "list_new_transactions",
+    "get_repayment_candidates",
+    "get_current_card_cycle",
+    "get_spending_trends",
+    "list_payee_rules",
+    "preview_payee_category",
+    "get_payee_match_types",
+    "list_priority_items",
+    "get_priority_item",
+    "get_priority_message",
+    "get_health_score",
+    "get_life_states",
+    "get_correlations",
+    "get_insights",
+    "get_weekly_recap",
+    "get_ask_suggestions",
+    "get_model_health",
+    "get_notifications",
+    "list_trips",
+    "get_trip",
+    "get_trip_attachment",
+    "get_movement",
+    "get_coding_activity",
+    "get_api_info",
+    "get_api_health",
 }
 
 
@@ -77,6 +103,12 @@ async def test_transaction_truncation_is_explicit():
         ("list_transactions", {"limit": 501}),
         ("get_card_statement", {"statement_id": "../sync"}),
         ("get_card_bills", {"months": 25}),
+        ("get_trip", {"trip_id": "../mail/accounts"}),
+        ("get_trip_attachment", {"trip_id": "valid", "attachment_id": "x%2Fy"}),
+        ("get_current_card_cycle", {"bank": "HDFC/../sync", "card_last4": "1234"}),
+        ("get_priority_item", {"item_id": 0}),
+        ("get_movement", {"start_date": "2025-09-03", "end_date": "2025-09-01"}),
+        ("get_movement", {"start_date": "2020-01-01", "end_date": "2025-09-01"}),
     ],
 )
 async def test_tool_validation_happens_before_network(name, args):
@@ -127,6 +159,55 @@ async def test_optional_reads_have_actual_schemas_and_use_post_only_for_the_brid
         ("get_budgets", {}, "/budgets", {}),
         ("get_money_profile", {}, "/money/profile", {}),
         ("get_recurring_charges", {}, "/expenses/recurring", {"window_days": "180"}),
+        ("get_pulse_checkin", {"day": "2025-09-02"}, "/mood/2025-09-02", {}),
+        (
+            "get_repayment_candidates",
+            {"transaction_id": 8},
+            "/expenses/8/repayment-candidates",
+            {"window_days": "120"},
+        ),
+        (
+            "get_current_card_cycle",
+            {"bank": "SBI", "card_last4": "12"},
+            "/statements/cycles/current/SBI/12",
+            {},
+        ),
+        ("get_spending_trends", {}, "/statements/trends", {"months": "6"}),
+        ("list_payee_rules", {}, "/payee-labels", {}),
+        (
+            "preview_payee_category",
+            {"desc": "Synthetic shop"},
+            "/payee-labels/preview",
+            {"desc": "Synthetic shop"},
+        ),
+        ("get_payee_match_types", {}, "/payee-labels/match-types", {}),
+        (
+            "list_priority_items",
+            {"label": "job", "state": "done", "include_done": True, "limit": 7},
+            "/priority",
+            {"label": "job", "state": "done", "include_done": "true", "limit": "7"},
+        ),
+        ("get_priority_item", {"item_id": 9}, "/priority/9", {}),
+        ("get_priority_message", {"item_id": 9}, "/priority/9/message", {}),
+        ("get_health_score", {"day": "2025-09-02"}, "/analytics/scores/2025-09-02", {}),
+        ("get_life_states", {}, "/analytics/state", {"days": "30"}),
+        ("get_correlations", {}, "/analytics/insights", {}),
+        ("get_insights", {}, "/analytics/synthesis", {}),
+        ("get_weekly_recap", {}, "/analytics/weekly-recap", {}),
+        ("get_ask_suggestions", {}, "/chat/suggestions", {"days": "30"}),
+        ("get_model_health", {}, "/chat/health", {}),
+        ("get_notifications", {}, "/notifications", {}),
+        ("list_trips", {}, "/trips", {}),
+        ("get_trip", {"trip_id": "synthetic-trip"}, "/trips/synthetic-trip", {}),
+        (
+            "get_movement",
+            {"start_date": "2025-09-01", "end_date": "2025-09-03"},
+            "/movement/days",
+            {"start": "2025-09-01", "end": "2025-09-03"},
+        ),
+        ("get_coding_activity", {}, "/github", {"days": "30"}),
+        ("get_api_info", {}, "/", {}),
+        ("get_api_health", {}, "/healthz", {}),
     ],
 )
 async def test_tools_route_to_the_existing_api_contract(name, args, path, params):
@@ -143,5 +224,22 @@ async def test_tools_route_to_the_existing_api_contract(name, args, path, params
         assert seen[0].method == "GET"
         assert seen[0].url.path == path
         assert dict(seen[0].url.params) == params
+    finally:
+        await client.aclose()
+
+
+async def test_new_transaction_cursor_reports_possible_further_pages():
+    client = LifeOSClient(
+        Settings(),
+        httpx.MockTransport(lambda r: httpx.Response(200, json=[{"id": 11}, {"id": 12}])),
+    )
+    try:
+        result = structured(
+            await create_server(Settings(), client).call_tool(
+                "list_new_transactions", {"after_id": 10, "limit": 2}
+            )
+        )
+        assert result["data"] == [{"id": 11}, {"id": 12}]
+        assert result["meta"]["may_have_more"] is True
     finally:
         await client.aclose()

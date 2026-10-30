@@ -1,18 +1,21 @@
 # LifeOS MCP
 
-Read-only tools for accessing LifeOS from Hermes and other MCP clients. The main
+Read-only tools for accessing LifeOS from compatible MCP clients, including ChatGPT,
+Hermes and future LifeOS Ask. The main
 data stays in LifeOS on the Jetson. The connector asks the existing backend for
 recorded information; it does not maintain a second ledger, infer missing health
 readings, or call an LLM to produce tool results.
 
-**Status:** initial implementation. Twelve tools use existing LifeOS HTTP routes.
+**Status:** v0.2. Thirty-eight tools use existing LifeOS HTTP reading routes.
 Two additional tools use an optional backend adapter included in this repository.
-Neither the adapter nor the connector is installed in production. Hermes on the
+Neither the adapter nor the connector is installed in production. ChatGPT is not
+connected. Hermes on the
 Raspberry Pi and LifeOS Ask have not been reconfigured.
 
 ```mermaid
 flowchart LR
-    H[Hermes on Raspberry Pi] --> M[lifeos-mcp stdio subprocess]
+    H[Compatible local MCP clients] --> M[lifeos-mcp stdio subprocess]
+    C[ChatGPT through Secure MCP Tunnel] -.-> M
     A[Future LifeOS Ask MCP client] -.-> M
     M --> B[Jetson LifeOS API]
     B --> D[(LifeOS PostgreSQL)]
@@ -34,16 +37,52 @@ flowchart LR
 | `get_budgets` | none | `/budgets` |
 | `get_money_profile` | none | `/money/profile` |
 | `get_recurring_charges` | `days=180` | `/expenses/recurring` |
+| `get_pulse_checkin` | `day` | `/mood/{day}` |
+| `list_new_transactions` | `after_id=0`, `limit=100` | `/expenses/new` |
+| `get_repayment_candidates` | `transaction_id`, `days=120` | `/expenses/{id}/repayment-candidates` |
+| `get_current_card_cycle` | `bank`, `card_last4` | `/statements/cycles/current/{bank}/{last4}` |
+| `get_spending_trends` | `months=6` | `/statements/trends` |
+| `list_payee_rules` | none | `/payee-labels` |
+| `preview_payee_category` | `desc` | `/payee-labels/preview` |
+| `get_payee_match_types` | none | `/payee-labels/match-types` |
+| `list_priority_items` | optional `label`/`state`, `include_done=false`, `limit=100` | `/priority` |
+| `get_priority_item` | `item_id` | `/priority/{id}` |
+| `get_priority_message` | `item_id` | `/priority/{id}/message` |
+| `get_health_score` | `day` | `/analytics/scores/{day}` |
+| `get_life_states` | `days=30` | `/analytics/state` |
+| `get_correlations` | none | `/analytics/insights` |
+| `get_insights` | none | `/analytics/synthesis` |
+| `get_weekly_recap` | none | `/analytics/weekly-recap` |
+| `get_ask_suggestions` | `days=30` | `/chat/suggestions` |
+| `get_model_health` | none | `/chat/health` |
+| `get_notifications` | none | `/notifications` |
+| `list_trips` | none | `/trips` |
+| `get_trip` | `trip_id` | `/trips/{id}` |
+| `get_trip_attachment` | `trip_id`, `attachment_id` | `/trips/{id}/attachments/{id}` |
+| `get_movement` | optional `start_date`/`end_date`, default 7 days | `/movement/days` |
+| `get_coding_activity` | `days=30` | `/github` |
+| `get_api_info` | none | `/` |
+| `get_api_health` | none | `/healthz` |
 | `health_records` **optional** | `query`: dates or `days=14`, at most 90 days | adapter → existing LifeOS health reader |
 | `query_money` **optional** | `query`: dates, comparisons, filters, grouping, `limit=10` | adapter → existing guarded money query |
 
 Optional tools are **absent from discovery** unless `LIFEOS_ENABLE_AGENT_READS=true`
 and a dedicated adapter token is configured. Setting that flag does not install
 the adapter: see [backend installation](docs/backend-adapter.md).
+They are optional because the backend read interface is not installed yet, not
+because detailed health or analytical money access is unimportant. See the
+[detailed explanation](docs/optional-tools.md).
+
+The catalog covers **38 of the 39 audited application GET operations**. The one
+exception, `GET /mail/accounts`, can create account-registry entries and is therefore
+not a pure read. See the [complete coverage and exclusions](docs/read-coverage.md).
 
 Day-count tools accept 1–366 days; bill history accepts 1–24 months. Transaction
 lists return at most 500 rows with explicit truncation metadata. There is a 2 MiB
 upstream-response cap: large reads fail with an instruction to narrow the window.
+Attachments return original bytes as embedded MIME-typed resources, with size and
+SHA-256 metadata; files exceeding the same cap fail explicitly. File presentation
+depends on the MCP client. No attachment is executed or written to local storage.
 The optional money query allows windows up to 3660 days and at most 50 detail or
 group rows; LifeOS calculates its full-window summary separately from that limit.
 
@@ -63,11 +102,12 @@ export LIFEOS_API_BASE_URL=http://192.168.3.30:8000
 ```
 
 The final command serves MCP over stdin/stdout. It opens no inbound network port.
-Hermes normally launches it as a subprocess. Keep API/model diagnostics on stderr;
+Local MCP clients normally launch it as a subprocess. Keep API/model diagnostics on stderr;
 stdout belongs to the protocol. `--list-tools` prints schemas without reading data.
 
-See [Hermes setup](docs/hermes.md) for the configuration to use when deployment is
-requested. Running on the Pi requires network access from the Pi to the Jetson.
+See [client compatibility and ChatGPT](docs/clients.md), or [Hermes setup](docs/hermes.md)
+for one local-client example. Running on the Pi requires network access from the Pi
+to the Jetson. No client connection or tunnel is configured by this repository.
 
 ## Configuration
 
@@ -94,6 +134,8 @@ Amounts, dates, currencies and returned values pass through from LifeOS.
 - Scores are not raw health readings. Missing values stay missing, not zero.
 - `get_today` reads a brief but the existing API can regenerate its **derived
   cache** in the background. The connector never edits source records.
+- `get_ask_suggestions` can likewise refresh its generated cache. These are reads
+  of user records, not a promise that the backend never writes derived caches.
 - A transaction listing can include credits, transfers and EMI. Its first N rows
   must not be summed and presented as the full spending total.
 - The optional `query_money` reuses existing Ask accounting: spending excludes
@@ -111,7 +153,7 @@ access could use its own network tools. The optional adapter has a separate toke
 and database-enforced read-only transactions.
 
 Retrieved results enter the client's conversation and may be retained there. If
-Hermes uses a cloud model, the selected tool results can be sent to that provider.
+the client uses a cloud model, selected tool results can be sent to that provider.
 The connector itself does not persist retrieved data or record request bodies.
 
 ## Development
