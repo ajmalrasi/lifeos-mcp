@@ -128,7 +128,9 @@ async def test_native_money_query_is_always_advertised_and_uses_its_api():
 
     def handler(request):
         seen.append(request)
-        return httpx.Response(200, json={"window": {}, "summary": {"total": "12.34"}})
+        return httpx.Response(
+            200, json={"window": {}, "currency": "USD", "summary": {"total": "12.34"}}
+        )
 
     settings = Settings()
     client = LifeOSClient(settings, httpx.MockTransport(handler))
@@ -138,10 +140,13 @@ async def test_native_money_query_is_always_advertised_and_uses_its_api():
         assert {t.name for t in tools} == EXPECTED
         schema = next(t.inputSchema for t in tools if t.name == "query_money")
         assert "query" in schema["properties"]
-        await server.call_tool("query_money", {"query": {"min_amount": "12.34", "limit": 1}})
+        await server.call_tool(
+            "query_money", {"query": {"min_amount": "12.34", "limit": 1, "currency": "USD"}}
+        )
         assert seen[0].method == "POST"
         assert seen[0].url.path == "/expenses/query"
         assert json.loads(seen[0].content)["min_amount"] == "12.34"
+        assert json.loads(seen[0].content)["currency"] == "USD"
     finally:
         await client.aclose()
 

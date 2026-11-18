@@ -54,7 +54,8 @@ Inputs inside `query` include:
 - `mode`: spending, income or all rows; defaults to spending.
 - Inclusive primary dates; defaults to the latest 30-day window.
 - Optional baseline dates for comparisons; both baseline dates are required.
-- Category, payee text, account text, source and minimum/maximum amount filters.
+- Currency (an uppercase code such as `INR` or `USD`), category, payee text,
+  account text, source and minimum/maximum amount filters.
 - Grouping by day, week, month, category, payee, account, source or direction.
 - Sorting and a detail/group row limit of 1–50; default 10. Each date window is
   limited to 3660 days. The full summary is calculated before the row limit.
@@ -62,6 +63,10 @@ Inputs inside `query` include:
 Returns LifeOS's summary, requested rows/groups, window/filter metadata, available
 coverage and, when requested, baseline totals, difference and percentage change.
 The connector preserves backend amounts and uses no model-written SQL.
+Use the returned currency for monetary totals. If matching records across the
+requested windows span currencies, run one query per currency.
+Upgrade the LifeOS backend before using this version of the money tool. The
+tool requires a response that identifies the totals' currency.
 
 Example question: “Compare food spending in September with August, by merchant.”
 

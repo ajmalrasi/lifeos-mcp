@@ -151,7 +151,11 @@ class LifeOSClient:
         return Attachment(content=content, mime_type=mime, source=f"GET {path}")
 
     async def query_money(self, arguments: dict) -> dict:
-        return await self._request("POST", MONEY_QUERY_PATH, body=arguments)
+        result = await self._request("POST", MONEY_QUERY_PATH, body=arguments)
+        data = result["data"]
+        if not isinstance(data, dict) or "currency" not in data:
+            raise LifeOSError("LifeOS returned unlabeled money totals; update the backend")
+        return result
 
     async def _request(self, method: str, path: str, *, params=None, body=None) -> dict:
         data, _ = await self._fetch(method, path, params=params, body=body)
@@ -187,7 +191,8 @@ class LifeOSClient:
                     raise LifeOSError(
                         "The native LifeOS read endpoint is unavailable; update the backend"
                     )
-                if not 200 <= response.status_code < 300:
+                money_validation_error = response.status_code == 422 and path == MONEY_QUERY_PATH
+                if not (200 <= response.status_code < 300 or money_validation_error):
                     raise LifeOSError(f"LifeOS returned HTTP {response.status_code}")
                 data = bytearray()
                 async for chunk in response.aiter_bytes():
@@ -197,11 +202,32 @@ class LifeOSClient:
                             "LifeOS response is too large; narrow the read "
                             "or use a smaller attachment"
                         )
+                if money_validation_error:
+                    raise LifeOSError(_money_error_message(data))
                 return bytes(data), response.headers
         except httpx.TimeoutException:
             raise LifeOSError("LifeOS request timed out; no result was substituted") from None
         except httpx.HTTPError:
             raise LifeOSError("LifeOS could not be reached; check the private network") from None
+
+
+def _money_error_message(data: bytearray) -> str:
+    try:
+        detail = json.loads(data)["detail"]
+        if detail["code"] == "mixed_currencies":
+            currencies = detail["currencies"]
+            if (
+                isinstance(currencies, list)
+                and 2 <= len(currencies) <= 16
+                and all(
+                    isinstance(code, str) and re.fullmatch(r"[A-Z]{3}", code) for code in currencies
+                )
+            ):
+                codes = ", ".join(currencies)
+                return f"Matches multiple currencies ({codes}). Specify one currency."
+    except (KeyError, TypeError, ValueError):
+        pass
+    return "LifeOS rejected the money query; check the query dates and filters"
 
 
 def envelope(data: Any, source: str) -> dict:

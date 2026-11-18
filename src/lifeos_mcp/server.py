@@ -423,7 +423,8 @@ def create_server(settings: Settings, client: LifeOSClient | None = None) -> Fas
     async def query_money(query: MoneyQuery) -> ToolResult:
         """Run LifeOS's guarded analytical money query for exact dates, filters, breakdowns and
         comparisons. Its spending mode excludes transfers/returns but includes EMI, matching
-        existing Ask; state that basis. No arbitrary SQL. Uses the native /expenses/query endpoint.
+        existing Ask; state that basis. Use the result's currency for all totals and pass the
+        currency filter when matching records span currencies. Uses the native /expenses/query.
         """
         try:
             return await api.query_money(query.model_dump(mode="json", exclude_none=True))

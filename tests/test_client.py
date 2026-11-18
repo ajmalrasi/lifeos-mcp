@@ -98,6 +98,53 @@ async def test_bad_data_is_an_error_not_a_success(body):
         await client.aclose()
 
 
+async def test_mixed_money_error_shows_currencies_without_echoing_the_response():
+    def handler(request):
+        return httpx.Response(
+            422,
+            json={
+                "detail": {
+                    "code": "mixed_currencies",
+                    "currencies": ["INR", "USD"],
+                    "message": "private-details",
+                }
+            },
+        )
+
+    client = LifeOSClient(Settings(), httpx.MockTransport(handler))
+    try:
+        with pytest.raises(LifeOSError, match=r"INR, USD\)\. Specify one currency") as error:
+            await client.query_money({})
+        assert "private-details" not in str(error.value)
+    finally:
+        await client.aclose()
+
+
+async def test_other_money_validation_errors_remain_sanitized():
+    client = LifeOSClient(
+        Settings(),
+        httpx.MockTransport(lambda r: httpx.Response(422, text="private-details")),
+    )
+    try:
+        with pytest.raises(LifeOSError, match="check the query dates and filters") as error:
+            await client.query_money({})
+        assert "private-details" not in str(error.value)
+    finally:
+        await client.aclose()
+
+
+async def test_money_query_requires_the_currency_aware_backend():
+    client = LifeOSClient(
+        Settings(),
+        httpx.MockTransport(lambda r: httpx.Response(200, json={"summary": {"total": 120}})),
+    )
+    try:
+        with pytest.raises(LifeOSError, match="update the backend"):
+            await client.query_money({})
+    finally:
+        await client.aclose()
+
+
 async def test_response_limit_is_enforced():
     client = LifeOSClient(
         Settings(max_response_bytes=1024),

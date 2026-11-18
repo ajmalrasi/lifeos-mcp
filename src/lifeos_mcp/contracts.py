@@ -62,6 +62,9 @@ class MoneyQuery(BaseModel):
     counterparty_contains: str | None = Field(default=None, max_length=200)
     account_contains: str | None = Field(default=None, max_length=200)
     source: str | None = Field(default=None, max_length=200)
+    currency: str | None = Field(
+        default=None, pattern=r"^[A-Z]{3}$", description="Currency code, such as INR or USD."
+    )
     min_amount: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
     max_amount: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
     sort_by: Literal["total", "count", "average", "max", "date", "amount", "name"] | None = None
